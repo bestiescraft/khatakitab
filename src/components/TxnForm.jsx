@@ -11,6 +11,7 @@ export default function TxnForm({ open, onClose, partyId, type }) {
   const [note, setNote] = useState('');
   const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
   const [category, setCategory] = useState('');
+  const [saving, setSaving] = useState(false); // ← FIX: track saving state
 
   useEffect(() => {
     if (open) {
@@ -18,19 +19,27 @@ export default function TxnForm({ open, onClose, partyId, type }) {
       setNote('');
       setDate(new Date().toISOString().slice(0, 10));
       setCategory('');
+      setSaving(false); // ← reset on open
     }
   }, [open]);
 
   const save = async () => {
+    if (saving) return; // ← FIX: prevent double submit
     const amt = parseFloat(amount);
     if (!amt || amt <= 0) {
       toast('Sahi amount daalein', 'error');
       return;
     }
-    const finalNote = category ? (note ? `${category} · ${note}` : category) : note;
-    await addTransaction({ partyId, type, amount: amt, note: finalNote, date });
-    toast(type === 'udhar' ? 'Udhar added' : 'Jama added');
-    onClose();
+    setSaving(true); // ← lock the button
+    try {
+      const finalNote = category ? (note ? `${category} · ${note}` : category) : note;
+      await addTransaction({ partyId, type, amount: amt, note: finalNote, date });
+      toast(type === 'udhar' ? 'Udhar added' : 'Jama added');
+      onClose();
+    } catch (e) {
+      toast('Error saving entry', 'error');
+      setSaving(false); // ← unlock only on error (on success modal closes)
+    }
   };
 
   const isUdhar = type === 'udhar';
@@ -62,12 +71,21 @@ export default function TxnForm({ open, onClose, partyId, type }) {
 
       <div className="mb-3">
         <label className="block text-[13px] font-semibold text-gray-700 mb-1.5">Date</label>
-        <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="w-full py-3 px-3.5 border-[1.5px] border-gray-200 rounded-xl outline-none" />
+        <input
+          type="date"
+          value={date}
+          onChange={(e) => setDate(e.target.value)}
+          className="w-full py-3 px-3.5 border-[1.5px] border-gray-200 rounded-xl outline-none"
+        />
       </div>
 
       <div className="mb-3">
         <label className="block text-[13px] font-semibold text-gray-700 mb-1.5">Category</label>
-        <select value={category} onChange={(e) => setCategory(e.target.value)} className="w-full py-3 px-3 border-[1.5px] border-gray-200 rounded-xl outline-none bg-white">
+        <select
+          value={category}
+          onChange={(e) => setCategory(e.target.value)}
+          className="w-full py-3 px-3 border-[1.5px] border-gray-200 rounded-xl outline-none bg-white"
+        >
           <option value="">— Select —</option>
           {CATEGORIES.map((c) => <option key={c}>{c}</option>)}
         </select>
@@ -75,17 +93,33 @@ export default function TxnForm({ open, onClose, partyId, type }) {
 
       <div className="mb-3">
         <label className="block text-[13px] font-semibold text-gray-700 mb-1.5">Note</label>
-        <input value={note} onChange={(e) => setNote(e.target.value)} className="w-full py-3 px-3.5 border-[1.5px] border-gray-200 rounded-xl outline-none" placeholder="Item details, invoice #" maxLength={200} data-testid="input-note" />
+        <input
+          value={note}
+          onChange={(e) => setNote(e.target.value)}
+          className="w-full py-3 px-3.5 border-[1.5px] border-gray-200 rounded-xl outline-none"
+          placeholder="Item details, invoice #"
+          maxLength={200}
+          data-testid="input-note"
+        />
       </div>
 
       <button
         onClick={save}
-        className={`w-full py-3.5 mt-2 rounded-xl font-bold text-white text-[15px] ${isUdhar ? 'bg-brand-red' : 'bg-brand-green'}`}
+        disabled={saving} // ← FIX: disable while saving
+        className={`w-full py-3.5 mt-2 rounded-xl font-bold text-white text-[15px] transition
+          ${isUdhar ? 'bg-brand-red' : 'bg-brand-green'}
+          ${saving ? 'opacity-60 cursor-not-allowed' : 'active:scale-95'}`}
         data-testid="txn-save-btn"
       >
-        ✅ Save Entry
+        {saving ? 'Saving...' : '✅ Save Entry'}
       </button>
-      <button onClick={onClose} className="w-full py-3.5 mt-2 rounded-xl font-semibold bg-gray-100 text-gray-700">Cancel</button>
+      <button
+        onClick={onClose}
+        disabled={saving}
+        className="w-full py-3.5 mt-2 rounded-xl font-semibold bg-gray-100 text-gray-700"
+      >
+        Cancel
+      </button>
     </Modal>
   );
 }
