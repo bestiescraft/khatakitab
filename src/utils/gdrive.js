@@ -5,7 +5,6 @@ let tokenClient;
 let isGapiLoaded = false;
 let isGsiLoaded = false;
 
-// We will use import.meta.env.VITE_GOOGLE_CLIENT_ID
 export const initGoogleClient = (clientId, onToken) => {
   return new Promise((resolve, reject) => {
     // Load gapi
@@ -26,7 +25,6 @@ export const initGoogleClient = (clientId, onToken) => {
     if (window.gapi && window.gapi.client) {
       loadGapi();
     } else {
-      // Listen for a custom event or just poll (simplest for now)
       const interval = setInterval(() => {
         if (window.gapi) {
           clearInterval(interval);
@@ -35,11 +33,12 @@ export const initGoogleClient = (clientId, onToken) => {
       }, 100);
     }
 
-    // Load GIS
+    // Load GIS — ux_mode: 'popup' fixes the storagerelay:// redirect_uri error
     const loadGsi = () => {
       tokenClient = window.google.accounts.oauth2.initTokenClient({
         client_id: clientId,
         scope: SCOPES,
+        ux_mode: 'popup',
         callback: (resp) => {
           if (resp.error !== undefined) {
             reject(resp);
@@ -70,8 +69,9 @@ export const signIn = () => {
     tokenClient.callback = (resp) => {
       if (resp.error !== undefined) {
         reject(resp);
+      } else {
+        resolve(resp);
       }
-      resolve(resp);
     };
     if (window.gapi.client.getToken() === null) {
       tokenClient.requestAccessToken({ prompt: 'consent' });
@@ -89,19 +89,17 @@ export const checkSignInStatus = () => {
 
 const FILENAME = 'khatakitab_backup.json';
 
-// Uploads data to the appDataFolder
 export const uploadToDrive = async (data) => {
   if (!checkSignInStatus()) throw new Error('Not signed in');
+
+  const fileContent = JSON.stringify(data);
 
   const fileMetadata = {
     name: FILENAME,
     parents: ['appDataFolder'],
   };
 
-  const fileContent = JSON.stringify(data);
-  const file = new Blob([fileContent], { type: 'application/json' });
-
-  // First, check if file exists
+  // Check if file already exists
   let fileId = null;
   const res = await window.gapi.client.drive.files.list({
     spaces: 'appDataFolder',
@@ -128,7 +126,6 @@ export const uploadToDrive = async (data) => {
 
   let request;
   if (fileId) {
-    // Update existing
     request = window.gapi.client.request({
       path: `/upload/drive/v3/files/${fileId}`,
       method: 'PATCH',
@@ -139,7 +136,6 @@ export const uploadToDrive = async (data) => {
       body: multipartRequestBody
     });
   } else {
-    // Create new
     request = window.gapi.client.request({
       path: '/upload/drive/v3/files',
       method: 'POST',
@@ -185,7 +181,6 @@ export const downloadFromDrive = async () => {
     throw new Error('Failed to download file');
   }
 
-  // The body contains the JSON string
   try {
     const data = typeof fileRes.body === 'string' ? JSON.parse(fileRes.body) : fileRes.result;
     return data;
